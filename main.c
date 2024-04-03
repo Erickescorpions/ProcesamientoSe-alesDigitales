@@ -45,7 +45,7 @@ float calcular_potencia_fn(float* fn, int longitud) {
     }
 
     potencia_fn = potencia_fn / longitud;
-    // printf("La potencia de la senal es: %f\n", potencia_fn);
+    printf("La potencia de la senal es: %f\n", potencia_fn);
 
     return potencia_fn;
 }
@@ -62,6 +62,7 @@ float calcular_potencia_ruido(float snr, float potencia_fn) {
         snr_calculado = calcular_snr(potencia_ruido, potencia_fn);
     }
 
+    printf("La potencia del ruido es: %f\n", potencia_ruido);
     printf("El snr calculado es: %f \n", snr_calculado);
     return potencia_ruido;
 }
@@ -75,9 +76,9 @@ void generar_ruido_en_fn(float* fn, int longitud) {
 
     // Calculamos la potencia del ruido
     float potencia_ruido = calcular_potencia_ruido(SNR, potencia_fn);
-    srand(time(NULL));
     float desviacion_estandar_ruido = sqrt(potencia_ruido);
-
+    
+    srand(time(NULL));
     // Aplicamos el ruido a la senal 
     for(int i = 0; i < longitud; i++) {
         fn[i] = fn[i] + desviacion_estandar_ruido * ((float)rand() / RAND_MAX - 0.5);
