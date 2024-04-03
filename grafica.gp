@@ -20,7 +20,10 @@ unset ylabel
 set title "Submuestreo"
 set xlabel "muestras"
 set ylabel "y(n)"
-plot "submuestras.dat" with linespoints
+
+# Establece el valor que se interpretará como datos faltantes solo para la segunda gráfica
+#set datafile missing "0.0000"
+plot "submuestras.dat" with linespoints pointtype 7
 
 # Termina la configuración de la segunda subparcela
 unset title
@@ -28,3 +31,4 @@ unset xlabel
 unset ylabel
 
 unset multiplot
+
