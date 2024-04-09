@@ -37,6 +37,17 @@ void fn_a_archivo(float* fn, char* nombre_archivo, int longitud) {
     fclose(archivo);
 }
 
+void fn_entero_a_archivo(int* fn, char* nombre_archivo, int longitud) {
+    FILE* archivo = fopen(nombre_archivo, "w");
+
+    for(int i = 0; i < longitud; i++) {
+        fprintf(archivo, "%d\n", fn[i]);
+        //printf("%f - %d\n", fn[i], i);
+    }
+
+    fclose(archivo);
+}
+
 float calcular_potencia_fn(float* fn, int longitud) {
     float potencia_fn = 0.0;
 
@@ -105,6 +116,20 @@ float* obtener_submuestras(float* fn, int periodo, int frecuencia_muestreo) {
     return submuestreo;
 }
 
+int* cuantizacion(float* x, int longitud, int qe, int qi, int redondeo) {
+    int* senial_cuantizada = malloc(longitud * sizeof(int));
+    
+    int tam_palabra = qe + qi;
+    float aumento_por_redondeo = redondeo == 1 ? 0.5 : 0.0; 
+
+    for(int i = 0; i < longitud; i++) {
+        int parte_entera = (int) x[i] << (tam_palabra - qi);
+        int parte_decimal = floor((pow(x[i], qi) + aumento_por_redondeo));
+        senial_cuantizada[i] = parte_entera + parte_decimal;
+    }
+
+    return senial_cuantizada;
+}
 
 int main() {
     int numero_equipo = 2;
@@ -116,13 +141,19 @@ int main() {
 
     float* fn = NULL;
     int razon_muestreo;
+    int qe = 0;
+    int qi = 0;
 
     if(numero_equipo % 2 == 0) { // par 
         fn = genera_cos(N, amplitud, frecuencia);
-        razon_muestreo = 2; 
+        razon_muestreo = 2;
+        qe = 5;
+        qi = 12;
     } else { // impar
         fn = genera_sen(N, amplitud, frecuencia);
-        razon_muestreo = 3; 
+        razon_muestreo = 3;
+        qe = 6;
+        qi = 13; 
     }
 
     generar_ruido_en_fn(fn, N);
@@ -132,6 +163,14 @@ int main() {
 
     float* submuestras = obtener_submuestras(fn, N, frecuencia_muestreo);
     fn_a_archivo(submuestras, "submuestras.dat", N);
+
+    // cuantizamos por redondeo
+    int* cuantizada_redondeo = cuantizacion(fn, N, qe, qi, 1);
+    // cuantizamos por truncamiento
+    int* cuantizada_truncamiento = cuantizacion(fn, N, qe, qi, 0);
+
+    fn_entero_a_archivo(cuantizada_redondeo, "redondeo.dat", N);
+    fn_entero_a_archivo(cuantizada_truncamiento, "truncamiento.dat", N);
 
     int ret = execlp("gnuplot", "gnuplot", "-p", "grafica.gp", NULL);
         
