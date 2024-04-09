@@ -3,18 +3,19 @@
 #include <math.h>
 #include <unistd.h>
 #include <time.h>
+#include <stdint.h>
 
 #define N 1000
 #define PI M_PI
 #define SNR 3
 
 float* genera_sen(int longitud, int amplitud, int frecuencia) {
-    float* sen = malloc(longitud * sizeof(float));
+    float* seno = malloc(longitud * sizeof(float));
     for(int n = 0; n < longitud; n++) {
-        sen[n] = amplitud * sin(2 * PI * frecuencia * n / N);
+        seno[n] = amplitud * sin(2 * PI * frecuencia * n / N);
     }
 
-    return sen;
+    return seno;
 }
 
 float* genera_cos(int longitud, int amplitud, int frecuencia) {
@@ -117,15 +118,46 @@ float* obtener_submuestras(float* fn, int periodo, int frecuencia_muestreo) {
 }
 
 int* cuantizacion(float* x, int longitud, int qe, int qi, int redondeo) {
-    int* senial_cuantizada = malloc(longitud * sizeof(int));
-    
-    int tam_palabra = qe + qi;
-    float aumento_por_redondeo = redondeo == 1 ? 0.5 : 0.0; 
+    int* senial_cuantizada = malloc(longitud * sizeof(int)); // Cambiado a int16_t
 
-    for(int i = 0; i < longitud; i++) {
-        int parte_entera = (int) x[i] << (tam_palabra - qi);
-        int parte_decimal = floor((pow(x[i], qi) + aumento_por_redondeo));
-        senial_cuantizada[i] = parte_entera + parte_decimal;
+    int tam_palabra = qe + qi;
+    float aumento_por_redondeo = redondeo == 1 ? 0.5 : 0.0; // si se activa la bandera de redonde, se suma 0.5
+
+    int rango_entero = pow(2, qe - 1) - 1; // qe - 1 por el bit de signo
+    printf("El rango de enteros para qe=%d bits es: %d\n", qe, rango_entero);
+
+    int rango_decimal = pow(2, qi) - 1;
+    printf("El rango de decimales para qi=%d bits es: %d\n", qi, rango_decimal);
+
+    for(int i = 0; i < N; i++) {
+        // convertimos la parte entera
+        int parte_entera = (int) x[i];
+        // vemos que la parte entera no se pase de su rango
+        if(parte_entera < -rango_entero || parte_entera > rango_entero) {
+            if(parte_entera < 0) {
+                parte_entera = -rango_entero;
+            } else {
+                parte_entera = rango_entero;
+            }
+        } 
+        //printf("Parte entera antes de recorrer bits: %d\n", parte_entera);
+        // recorremos la parte entera qi bits hacia la izquierda
+        parte_entera = parte_entera << qi;
+
+        // elevamos a 2^qi el numero y lo pasamos a entero
+        int parte_decimal = floor((x[i] * pow(2, qi)) + aumento_por_redondeo);
+        // revisamos que la parte decimal no se pase de su rango
+
+        if(rango_decimal < -rango_decimal || parte_decimal > rango_decimal) {
+            if(parte_decimal < 0) {
+                rango_decimal = -rango_decimal;
+            } else {
+                parte_decimal = rango_decimal;
+            }
+        } 
+
+        //printf("Parte entera: %d Parte decimal: %d\n", parte_entera, parte_decimal);
+        senial_cuantizada[i] = parte_entera + (int)parte_decimal;
     }
 
     return senial_cuantizada;
