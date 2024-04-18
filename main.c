@@ -4,6 +4,8 @@
 #include <unistd.h>
 #include <time.h>
 #include <stdint.h>
+#include <sys/wait.h> 
+
 
 #define N 1000
 #define PI M_PI
@@ -107,57 +109,51 @@ float* obtener_submuestras(float* fn, int periodo, int frecuencia_muestreo) {
     int indice_submuestreo = 0;
 
     for(int n = 0; n < periodo; n++) {
-        if(n % (int )periodo_submuestreo == 0) {
+        indice_submuestreo +=1;
+
+        if(indice_submuestreo==frecuencia_muestreo){
             submuestreo[n] = fn[n];
-        } else {
+            indice_submuestreo = 0;
+        } else{
             submuestreo[n] = 0;
         }
+
+
     }
 
     return submuestreo;
 }
 
-int* cuantizacion(float* x, int longitud, int qe, int qi, int redondeo) {
+
+int* cuantizacion(float* x, int longitud, int qi, int redondeo, int amplitud_original) {
     int* senial_cuantizada = malloc(longitud * sizeof(int)); // Cambiado a int16_t
 
-    int tam_palabra = qe + qi;
     float aumento_por_redondeo = redondeo == 1 ? 0.5 : 0.0; // si se activa la bandera de redonde, se suma 0.5
+    int qi_sin_signo = qi - 1;
 
-    int rango_entero = pow(2, qe - 1) - 1; // qe - 1 por el bit de signo
-    printf("El rango de enteros para qe=%d bits es: %d\n", qe, rango_entero);
+    int rango_decimal = pow(2, qi_sin_signo) - 1;
+    printf("El rango para qi=%d bits es: %d \n", qi, rango_decimal);
 
-    int rango_decimal = pow(2, qi) - 1;
-    printf("El rango de decimales para qi=%d bits es: %d\n", qi, rango_decimal);
+    float factor_de_normalizacion = 1.0 / amplitud_original;
+    printf("Factor de normalizacion = 1.0 / %d = %f\n", amplitud_original, factor_de_normalizacion);
 
     for(int i = 0; i < N; i++) {
-        // convertimos la parte entera
-        int parte_entera = (int) x[i];
-        // vemos que la parte entera no se pase de su rango
-        if(parte_entera < -rango_entero || parte_entera > rango_entero) {
-            if(parte_entera < 0) {
-                parte_entera = -rango_entero;
-            } else {
-                parte_entera = rango_entero;
-            }
-        } 
-        //printf("Parte entera antes de recorrer bits: %d\n", parte_entera);
-        // recorremos la parte entera qi bits hacia la izquierda
-        parte_entera = parte_entera << qi;
-
+        // Normalizamos la muestra
+        float muestra_normalizada = x[i] * factor_de_normalizacion;
+        
         // elevamos a 2^qi el numero y lo pasamos a entero
-        int parte_decimal = floor((x[i] * pow(2, qi)) + aumento_por_redondeo);
+        int parte_decimal = floor((muestra_normalizada * pow(2, qi_sin_signo)) + aumento_por_redondeo);
+        
         // revisamos que la parte decimal no se pase de su rango
-
-        if(rango_decimal < -rango_decimal || parte_decimal > rango_decimal) {
+        if(parte_decimal < -rango_decimal || parte_decimal > rango_decimal) {
             if(parte_decimal < 0) {
-                rango_decimal = -rango_decimal;
+                parte_decimal = -rango_decimal; // Corregir rango si es menor que el mínimo
             } else {
-                parte_decimal = rango_decimal;
+                parte_decimal = rango_decimal; // Corregir rango si es mayor que el máximo
             }
         } 
 
-        //printf("Parte entera: %d Parte decimal: %d\n", parte_entera, parte_decimal);
-        senial_cuantizada[i] = parte_entera + (int)parte_decimal;
+        senial_cuantizada[i] = parte_decimal;
     }
 
     return senial_cuantizada;
@@ -173,19 +169,19 @@ int main() {
 
     float* fn = NULL;
     int razon_muestreo;
-    int qe = 0;
-    int qi = 0;
+    int qi1 = 0;
+    int qi2 = 0;
 
     if(numero_equipo % 2 == 0) { // par 
         fn = genera_cos(N, amplitud, frecuencia);
         razon_muestreo = 2;
-        qe = 5;
-        qi = 12;
+        qi1 = 5;
+        qi2 = 12;
     } else { // impar
         fn = genera_sen(N, amplitud, frecuencia);
         razon_muestreo = 3;
-        qe = 6;
-        qi = 13; 
+        qi1 = 6;
+        qi2 = 13; 
     }
 
     generar_ruido_en_fn(fn, N);
@@ -196,20 +192,40 @@ int main() {
     float* submuestras = obtener_submuestras(fn, N, frecuencia_muestreo);
     fn_a_archivo(submuestras, "submuestras.dat", N);
 
-    // cuantizamos por redondeo
-    int* cuantizada_redondeo = cuantizacion(fn, N, qe, qi, 1);
-    // cuantizamos por truncamiento
-    int* cuantizada_truncamiento = cuantizacion(fn, N, qe, qi, 0);
+    // cuantizamos por redondeo 5 bits
+    int* cuantizada_redondeo5 = cuantizacion(fn, N, qi1, 1, amplitud);
+    // cuantizamos por truncamiento 5 bits
+    int* cuantizada_truncamiento5 = cuantizacion(fn, N, qi1, 0, amplitud);
 
-    fn_entero_a_archivo(cuantizada_redondeo, "redondeo.dat", N);
-    fn_entero_a_archivo(cuantizada_truncamiento, "truncamiento.dat", N);
+    fn_entero_a_archivo(cuantizada_redondeo5, "redondeo5.dat", N);
+    fn_entero_a_archivo(cuantizada_truncamiento5, "truncamiento5.dat", N);
 
-    int ret = execlp("gnuplot", "gnuplot", "-p", "grafica.gp", NULL);
-        
-    if (ret == -1) {
-        perror("Error al ejecutar Gnuplot");
+    // cuantizamos por redondeo 12 bits
+    int* cuantizada_redondeo12 = cuantizacion(fn, N, qi2, 1, amplitud);
+    // cuantizamos por truncamiento 12 bits
+    int* cuantizada_truncamiento12 = cuantizacion(fn, N, qi2, 0, amplitud);
+
+    fn_entero_a_archivo(cuantizada_redondeo12, "redondeo12.dat", N);
+    fn_entero_a_archivo(cuantizada_truncamiento12, "truncamiento12.dat", N);
+
+    // creamos un proceso hijo del programa para ejecutar por separado gnuplot
+    if (fork() == 0) {
+        execlp("gnuplot", "gnuplot", "-p", "grafica.gp", NULL);
+        perror("Error al ejecutar Gnuplot para grafica.gp");
         exit(1);
     }
+
+    // Segunda llamada a Gnuplot
+    if (fork() == 0) {
+        // Este es el proceso hijo
+        execlp("gnuplot", "gnuplot", "-p", "cuantizacion.gp", NULL);
+        perror("Error al ejecutar Gnuplot para cuantizacion.gp");
+        exit(1);
+    }
+
+    // Esperar a que ambos procesos hijos terminen
+    wait(NULL);
+    wait(NULL);
 
     free(fn);
 

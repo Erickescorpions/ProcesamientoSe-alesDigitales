@@ -3,7 +3,7 @@ set grid
 set style data lines
 set samples 1000
 
-set multiplot layout 2,2
+set multiplot layout 2,1
 
 #------------- Graf 1 ----------------
 set title "Funcion"
@@ -28,27 +28,4 @@ unset title
 unset xlabel
 unset ylabel
 
-#------------- Graf 3 ----------------
-set title "Redondeo"
-set xlabel "muestras"
-set ylabel "y(n)"
-
-plot "redondeo.dat"
-
-unset title
-unset xlabel
-unset ylabel
-
-#------------- Graf 4 ----------------
-set title "Truncamiento"
-set xlabel "muestras"
-set ylabel "y(n)"
-
-plot "truncamiento.dat" with linespoints pointtype 7
-
-unset title
-unset xlabel
-unset ylabel
-
 unset multiplot
-
