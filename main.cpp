@@ -1,10 +1,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+
 #include <unistd.h>
-#include <time.h>
-#include <stdint.h>
-#include <sys/wait.h> 
+#include <sys/wait.h>
+
+#include <random>
 
 #define N 1000
 #define PI M_PI
@@ -12,8 +13,8 @@
 
 float* genera_sen(int longitud, int amplitud, int frecuencia);
 float* genera_cos(int longitud, int amplitud, int frecuencia);
-void fn_a_archivo(float* fn, char* nombre_archivo, int longitud);
-void fn_entero_a_archivo(int* fn, char* nombre_archivo, int longitud);
+void fn_a_archivo(float* fn, const char* nombre_archivo, int longitud);
+void fn_entero_a_archivo(int* fn, const char* nombre_archivo, int longitud);
 float calcular_potencia_fn(float* fn, int longitud);
 float calcular_snr(float potencia_ruido, float potencia_fn);
 void generar_ruido_en_fn(float* fn, int longitud);
@@ -103,7 +104,7 @@ int main() {
 
 
 float* genera_sen(int longitud, int amplitud, int frecuencia) {
-    float* seno = malloc(longitud * sizeof(float));
+    float* seno = (float*) malloc(longitud * sizeof(float));
     for(int n = 0; n < longitud; n++) {
         seno[n] = amplitud * sin(2 * PI * frecuencia * n / N);
     }
@@ -112,7 +113,7 @@ float* genera_sen(int longitud, int amplitud, int frecuencia) {
 }
 
 float* genera_cos(int longitud, int amplitud, int frecuencia) {
-    float* coseno = malloc(longitud * sizeof(float));
+    float* coseno = (float*) malloc(longitud * sizeof(float));
     for(int n = 0; n < longitud; n++) {
         coseno[n] = amplitud * cos(2 * PI * frecuencia * n / N);
     }
@@ -120,7 +121,7 @@ float* genera_cos(int longitud, int amplitud, int frecuencia) {
     return coseno;
 }
 
-void fn_a_archivo(float* fn, char* nombre_archivo, int longitud) {
+void fn_a_archivo(float* fn, const char* nombre_archivo, int longitud) {
     FILE* archivo = fopen(nombre_archivo, "w");
 
     for(int i = 0; i < longitud; i++) {
@@ -131,7 +132,7 @@ void fn_a_archivo(float* fn, char* nombre_archivo, int longitud) {
     fclose(archivo);
 }
 
-void fn_entero_a_archivo(int* fn, char* nombre_archivo, int longitud) {
+void fn_entero_a_archivo(int* fn, const char* nombre_archivo, int longitud) {
     FILE* archivo = fopen(nombre_archivo, "w");
 
     for(int i = 0; i < longitud; i++) {
@@ -183,10 +184,14 @@ void generar_ruido_en_fn(float* fn, int longitud) {
     float potencia_ruido = calcular_potencia_ruido(SNR, potencia_fn);
     float desviacion_estandar_ruido = sqrt(potencia_ruido);
     
-    srand(time(NULL));
+    printf("La desviacion estandar del ruido es: %f\n", desviacion_estandar_ruido);
+
+    std::default_random_engine generator;
+    std::normal_distribution<double> distribution(0.0, desviacion_estandar_ruido);
+
     // Aplicamos el ruido a la senal 
     for(int i = 0; i < longitud; i++) {
-        fn[i] = fn[i] + desviacion_estandar_ruido * ((float)rand() / RAND_MAX - 0.5);
+        fn[i] = fn[i] + distribution(generator);
     }
 }
 
@@ -194,7 +199,7 @@ void generar_ruido_en_fn(float* fn, int longitud) {
 float* obtener_submuestras(float* fn, int longitud, int razon_submuestreo, int longitud_submuestreo) {
     
     printf("La longitud de la señal submuestreada es: %d\n", longitud_submuestreo);
-    float* submuestreo = malloc(longitud_submuestreo * sizeof(float));
+    float* submuestreo = (float*) malloc(longitud_submuestreo * sizeof(float));
 
     int indice_submuestreo = 0;
 
@@ -209,7 +214,7 @@ float* obtener_submuestras(float* fn, int longitud, int razon_submuestreo, int l
 
 
 int* cuantizacion(float* x, int longitud, int longitud_palabra, int redondeo, int amplitud_original) {
-    int* senial_cuantizada = malloc(longitud * sizeof(int));
+    int* senial_cuantizada = (int*) malloc(longitud * sizeof(int));
     
     // si se activa la bandera de redondeo, se suma 0.5
     float aumento_por_redondeo = redondeo == 1 ? 0.5 : 0.0;
