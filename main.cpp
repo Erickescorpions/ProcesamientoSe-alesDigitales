@@ -9,7 +9,7 @@
 
 #define N 1000
 #define PI M_PI
-#define SNR 3
+#define SNR_MAXIMO 3
 
 float* genera_sen(int longitud, int amplitud, int frecuencia);
 float* genera_cos(int longitud, int amplitud, int frecuencia);
@@ -181,7 +181,7 @@ void generar_ruido_en_fn(float* fn, int longitud) {
     float potencia_fn = calcular_potencia_fn(fn, longitud);
 
     // Calculamos la potencia del ruido
-    float potencia_ruido = calcular_potencia_ruido(SNR, potencia_fn);
+    float potencia_ruido = calcular_potencia_ruido(SNR_MAXIMO, potencia_fn);
     float desviacion_estandar_ruido = sqrt(potencia_ruido);
     
     printf("La desviacion estandar del ruido es: %f\n", desviacion_estandar_ruido);
