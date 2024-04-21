@@ -11,6 +11,91 @@
 #define PI M_PI
 #define SNR 3
 
+float* genera_sen(int longitud, int amplitud, int frecuencia);
+float* genera_cos(int longitud, int amplitud, int frecuencia);
+void fn_a_archivo(float* fn, char* nombre_archivo, int longitud);
+void fn_entero_a_archivo(int* fn, char* nombre_archivo, int longitud);
+float calcular_potencia_fn(float* fn, int longitud);
+float calcular_snr(float potencia_ruido, float potencia_fn);
+void generar_ruido_en_fn(float* fn, int longitud);
+float* obtener_submuestras(float* fn, int periodo, int frecuencia_muestreo);
+int* cuantizacion(float* x, int longitud, int qi, int redondeo, int amplitud_original);
+
+
+int main() {
+    int numero_equipo = 2;
+    fputs("Ingresa tu numero de equipo: ", stdout);
+    scanf("%d", &numero_equipo);
+
+    int amplitud = 2 * numero_equipo;
+    int frecuencia = 2 * numero_equipo;
+
+    float* fn = NULL;
+    int razon_muestreo;
+    int qi1 = 0;
+    int qi2 = 0;
+
+    if(numero_equipo % 2 == 0) { // par 
+        fn = genera_cos(N, amplitud, frecuencia);
+        razon_muestreo = 2;
+        qi1 = 5;
+        qi2 = 12;
+    } else { // impar
+        fn = genera_sen(N, amplitud, frecuencia);
+        razon_muestreo = 3;
+        qi1 = 6;
+        qi2 = 13; 
+    }
+
+    generar_ruido_en_fn(fn, N);
+    fn_a_archivo(fn, "fn.dat", N);
+    
+    int frecuencia_muestreo = razon_muestreo * numero_equipo;
+
+    float* submuestras = obtener_submuestras(fn, N, frecuencia_muestreo);
+    fn_a_archivo(submuestras, "submuestras.dat", N);
+
+    // cuantizamos por redondeo 5 bits
+    int* cuantizada_redondeo5 = cuantizacion(fn, N, qi1, 1, amplitud);
+    // cuantizamos por truncamiento 5 bits
+    int* cuantizada_truncamiento5 = cuantizacion(fn, N, qi1, 0, amplitud);
+
+    fn_entero_a_archivo(cuantizada_redondeo5, "redondeo5.dat", N);
+    fn_entero_a_archivo(cuantizada_truncamiento5, "truncamiento5.dat", N);
+
+    // cuantizamos por redondeo 12 bits
+    int* cuantizada_redondeo12 = cuantizacion(fn, N, qi2, 1, amplitud);
+    // cuantizamos por truncamiento 12 bits
+    int* cuantizada_truncamiento12 = cuantizacion(fn, N, qi2, 0, amplitud);
+
+    fn_entero_a_archivo(cuantizada_redondeo12, "redondeo12.dat", N);
+    fn_entero_a_archivo(cuantizada_truncamiento12, "truncamiento12.dat", N);
+
+    // creamos un proceso hijo del programa para ejecutar por separado gnuplot
+    if (fork() == 0) {
+        execlp("gnuplot", "gnuplot", "-p", "grafica.gp", NULL);
+        perror("Error al ejecutar Gnuplot para grafica.gp");
+        exit(1);
+    }
+
+    // Segunda llamada a Gnuplot
+    if (fork() == 0) {
+        // Este es el proceso hijo
+        execlp("gnuplot", "gnuplot", "-p", "cuantizacion.gp", NULL);
+        perror("Error al ejecutar Gnuplot para cuantizacion.gp");
+        exit(1);
+    }
+
+    // Esperar a que ambos procesos hijos terminen
+    wait(NULL);
+    wait(NULL);
+
+    free(fn);
+
+    return 0;
+}
+
+
 float* genera_sen(int longitud, int amplitud, int frecuencia) {
     float* seno = malloc(longitud * sizeof(float));
     for(int n = 0; n < longitud; n++) {
@@ -157,77 +242,4 @@ int* cuantizacion(float* x, int longitud, int qi, int redondeo, int amplitud_ori
     }
 
     return senial_cuantizada;
-}
-
-int main() {
-    int numero_equipo = 2;
-    fputs("Ingresa tu numero de equipo: ", stdout);
-    scanf("%d", &numero_equipo);
-
-    int amplitud = 2 * numero_equipo;
-    int frecuencia = 2 * numero_equipo;
-
-    float* fn = NULL;
-    int razon_muestreo;
-    int qi1 = 0;
-    int qi2 = 0;
-
-    if(numero_equipo % 2 == 0) { // par 
-        fn = genera_cos(N, amplitud, frecuencia);
-        razon_muestreo = 2;
-        qi1 = 5;
-        qi2 = 12;
-    } else { // impar
-        fn = genera_sen(N, amplitud, frecuencia);
-        razon_muestreo = 3;
-        qi1 = 6;
-        qi2 = 13; 
-    }
-
-    generar_ruido_en_fn(fn, N);
-    fn_a_archivo(fn, "fn.dat", N);
-    
-    int frecuencia_muestreo = razon_muestreo * numero_equipo;
-
-    float* submuestras = obtener_submuestras(fn, N, frecuencia_muestreo);
-    fn_a_archivo(submuestras, "submuestras.dat", N);
-
-    // cuantizamos por redondeo 5 bits
-    int* cuantizada_redondeo5 = cuantizacion(fn, N, qi1, 1, amplitud);
-    // cuantizamos por truncamiento 5 bits
-    int* cuantizada_truncamiento5 = cuantizacion(fn, N, qi1, 0, amplitud);
-
-    fn_entero_a_archivo(cuantizada_redondeo5, "redondeo5.dat", N);
-    fn_entero_a_archivo(cuantizada_truncamiento5, "truncamiento5.dat", N);
-
-    // cuantizamos por redondeo 12 bits
-    int* cuantizada_redondeo12 = cuantizacion(fn, N, qi2, 1, amplitud);
-    // cuantizamos por truncamiento 12 bits
-    int* cuantizada_truncamiento12 = cuantizacion(fn, N, qi2, 0, amplitud);
-
-    fn_entero_a_archivo(cuantizada_redondeo12, "redondeo12.dat", N);
-    fn_entero_a_archivo(cuantizada_truncamiento12, "truncamiento12.dat", N);
-
-    // creamos un proceso hijo del programa para ejecutar por separado gnuplot
-    if (fork() == 0) {
-        execlp("gnuplot", "gnuplot", "-p", "grafica.gp", NULL);
-        perror("Error al ejecutar Gnuplot para grafica.gp");
-        exit(1);
-    }
-
-    // Segunda llamada a Gnuplot
-    if (fork() == 0) {
-        // Este es el proceso hijo
-        execlp("gnuplot", "gnuplot", "-p", "cuantizacion.gp", NULL);
-        perror("Error al ejecutar Gnuplot para cuantizacion.gp");
-        exit(1);
-    }
-
-    // Esperar a que ambos procesos hijos terminen
-    wait(NULL);
-    wait(NULL);
-
-    free(fn);
-
-    return 0;
 }
