@@ -6,7 +6,7 @@ set samples 1000
 set multiplot layout 2,1
 
 #------------- Graf 1 ----------------
-set title "Funcion"
+set title "Funcion original con ruido"
 set xlabel   "muestras"
 set ylabel   "x(n)"
 plot  "fn.dat"
@@ -19,13 +19,12 @@ unset ylabel
 set title "Submuestreo"
 set xlabel "muestras"
 set ylabel "y(n)"
-
-# Establece el valor que se interpretará como datos faltantes solo para la segunda gráfica
-#set datafile missing "0.0000"
-plot "submuestras.dat" with linespoints pointtype 7
+plot "submuestras.dat"
 
 unset title
 unset xlabel
 unset ylabel
+
+unset samples  # Restablece la configuración de muestras
 
 unset multiplot

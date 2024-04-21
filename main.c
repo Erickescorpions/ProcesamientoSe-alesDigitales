@@ -6,7 +6,6 @@
 #include <stdint.h>
 #include <sys/wait.h> 
 
-
 #define N 1000
 #define PI M_PI
 #define SNR 3
@@ -18,7 +17,7 @@ void fn_entero_a_archivo(int* fn, char* nombre_archivo, int longitud);
 float calcular_potencia_fn(float* fn, int longitud);
 float calcular_snr(float potencia_ruido, float potencia_fn);
 void generar_ruido_en_fn(float* fn, int longitud);
-float* obtener_submuestras(float* fn, int periodo, int frecuencia_muestreo);
+float* obtener_submuestras(float* fn_muestreada, int longitud, int razon_submuestreo, int longitud_submuestreo);
 int* cuantizacion(float* x, int longitud, int qi, int redondeo, int amplitud_original);
 
 
@@ -31,18 +30,18 @@ int main() {
     int frecuencia = 2 * numero_equipo;
 
     float* fn = NULL;
-    int razon_muestreo;
+    int razon_submuestreo;
     int qi1 = 0;
     int qi2 = 0;
 
     if(numero_equipo % 2 == 0) { // par 
         fn = genera_cos(N, amplitud, frecuencia);
-        razon_muestreo = 2;
+        razon_submuestreo = 2 * numero_equipo;
         qi1 = 5;
         qi2 = 12;
     } else { // impar
         fn = genera_sen(N, amplitud, frecuencia);
-        razon_muestreo = 3;
+        razon_submuestreo = 3 * numero_equipo;
         qi1 = 6;
         qi2 = 13; 
     }
@@ -50,10 +49,10 @@ int main() {
     generar_ruido_en_fn(fn, N);
     fn_a_archivo(fn, "fn.dat", N);
     
-    int frecuencia_muestreo = razon_muestreo * numero_equipo;
-
-    float* submuestras = obtener_submuestras(fn, N, frecuencia_muestreo);
-    fn_a_archivo(submuestras, "submuestras.dat", N);
+    int longitud_submuestreo = floor((N + razon_submuestreo) / razon_submuestreo);
+    
+    float* submuestras = obtener_submuestras(fn, N, razon_submuestreo, longitud_submuestreo);
+    fn_a_archivo(submuestras, "submuestras.dat", longitud_submuestreo);
 
     // cuantizamos por redondeo 5 bits
     int* cuantizada_redondeo5 = cuantizacion(fn, N, qi1, 1, amplitud);
@@ -71,15 +70,16 @@ int main() {
     fn_entero_a_archivo(cuantizada_redondeo12, "redondeo12.dat", N);
     fn_entero_a_archivo(cuantizada_truncamiento12, "truncamiento12.dat", N);
 
-    // creamos un proceso hijo del programa para ejecutar por separado gnuplot
-    if (fork() == 0) {
+    // creamos un proceso hijo con fork para lanzar la grafica de la senial original
+    // y la senial submuestreada
+    if(fork() == 0) {
         execlp("gnuplot", "gnuplot", "-p", "grafica.gp", NULL);
         perror("Error al ejecutar Gnuplot para grafica.gp");
         exit(1);
     }
 
-    // Segunda llamada a Gnuplot
-    if (fork() == 0) {
+    // proceso hijo para las graficas de cuantizacion
+    if(fork() == 0) {
         // Este es el proceso hijo
         execlp("gnuplot", "gnuplot", "-p", "cuantizacion.gp", NULL);
         perror("Error al ejecutar Gnuplot para cuantizacion.gp");
@@ -90,7 +90,13 @@ int main() {
     wait(NULL);
     wait(NULL);
 
+    // liberamos memoria
     free(fn);
+    free(submuestras);
+    free(cuantizada_redondeo12);
+    free(cuantizada_redondeo5);
+    free(cuantizada_truncamiento12);
+    free(cuantizada_truncamiento5);
 
     return 0;
 }
@@ -184,61 +190,59 @@ void generar_ruido_en_fn(float* fn, int longitud) {
     }
 }
 
-float* obtener_submuestras(float* fn, int periodo, int frecuencia_muestreo) {
-    float* submuestreo = malloc(periodo * sizeof(float));
 
-    // la razon de muestreo es la frecuencia con la que queremos muestrear
-    // periodo = 1 / frecuencia
-    // normalizamos el periodo respecto al periodo de la senal original
-    int periodo_submuestreo = (1.0 / frecuencia_muestreo) * N;
+float* obtener_submuestras(float* fn, int longitud, int razon_submuestreo, int longitud_submuestreo) {
+    
+    printf("La longitud de la señal submuestreada es: %d\n", longitud_submuestreo);
+    float* submuestreo = malloc(longitud_submuestreo * sizeof(float));
+
     int indice_submuestreo = 0;
 
-    for(int n = 0; n < periodo; n++) {
-        indice_submuestreo +=1;
-
-        if(indice_submuestreo==frecuencia_muestreo){
-            submuestreo[n] = fn[n];
-            indice_submuestreo = 0;
-        } else{
-            submuestreo[n] = 0;
-        }
-
-
+    // Recorre la señal y submuestrea cada razon_submuestreo
+    for (int n = 0; n < longitud; n += razon_submuestreo) {
+        submuestreo[indice_submuestreo] = fn[n];
+        indice_submuestreo++;
     }
 
     return submuestreo;
 }
 
 
-int* cuantizacion(float* x, int longitud, int qi, int redondeo, int amplitud_original) {
-    int* senial_cuantizada = malloc(longitud * sizeof(int)); // Cambiado a int16_t
+int* cuantizacion(float* x, int longitud, int longitud_palabra, int redondeo, int amplitud_original) {
+    int* senial_cuantizada = malloc(longitud * sizeof(int));
+    
+    // si se activa la bandera de redondeo, se suma 0.5
+    float aumento_por_redondeo = redondeo == 1 ? 0.5 : 0.0;
 
-    float aumento_por_redondeo = redondeo == 1 ? 0.5 : 0.0; // si se activa la bandera de redonde, se suma 0.5
-    int qi_sin_signo = qi - 1;
+    // quitamos un bit para el signo
+    int longitud_palabra_sin_signo = longitud_palabra - 1;
 
-    int rango_decimal = pow(2, qi_sin_signo) - 1;
-    printf("El rango para qi=%d bits es: %d \n", qi, rango_decimal);
-
-    float factor_de_normalizacion = 1.0 / amplitud_original;
-    printf("Factor de normalizacion = 1.0 / %d = %f\n", amplitud_original, factor_de_normalizacion);
+    // calculamos el numero maximo que podemos guardar en la cantidad de bits que nos dieron
+    int maximo_valor = pow(2, longitud_palabra_sin_signo) - 1;
+    printf("El rango para qi=%d bits es: %d \n", longitud_palabra, maximo_valor);
 
     for(int i = 0; i < N; i++) {
         // Normalizamos la muestra
-        float muestra_normalizada = x[i] * factor_de_normalizacion;
+        float muestra_normalizada = x[i] / amplitud_original;
         
-        // elevamos a 2^qi el numero y lo pasamos a entero
-        int parte_decimal = floor((muestra_normalizada * pow(2, qi_sin_signo)) + aumento_por_redondeo);
+        // cuantizamos nuestra muestra -> (int) muestra * 2 ^ (longitud palabra sin signo)
+        // si queremos que el resultado se redondee, sumamos 0.5
+        int valor_cuantizado = floor((muestra_normalizada * pow(2, longitud_palabra_sin_signo)) + aumento_por_redondeo);
         
-        // revisamos que la parte decimal no se pase de su rango
-        if(parte_decimal < -rango_decimal || parte_decimal > rango_decimal) {
-            if(parte_decimal < 0) {
-                parte_decimal = -rango_decimal; // Corregir rango si es menor que el mínimo
-            } else {
-                parte_decimal = rango_decimal; // Corregir rango si es mayor que el máximo
-            }
-        } 
+        // revisamos el valor cuantizado no se pase del maximo que podemos guardar
 
-        senial_cuantizada[i] = parte_decimal;
+        if(valor_cuantizado > maximo_valor) {
+            // si se pasa, lo corregimos al maximo qeu se puede guardar
+            valor_cuantizado = maximo_valor;
+        }
+
+        // al contar con numero negativos, revisamos que no se pase del minimo negativo
+        if(valor_cuantizado < -maximo_valor) {
+            // si se pasa, lo encogemos al minimo que se puede guardar
+            valor_cuantizado = -maximo_valor; // Corregir rango si es menor que el mínimo
+        }
+
+        senial_cuantizada[i] = valor_cuantizado;
     }
 
     return senial_cuantizada;
