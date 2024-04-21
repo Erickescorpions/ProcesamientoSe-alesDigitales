@@ -22,7 +22,7 @@ int* cuantizacion(float* x, int longitud, int qi, int redondeo, int amplitud_ori
 
 
 int main() {
-    int numero_equipo = 2;
+    int numero_equipo;
     fputs("Ingresa tu numero de equipo: ", stdout);
     scanf("%d", &numero_equipo);
 
