@@ -219,12 +219,12 @@ int* cuantizacion(float* x, int longitud, int longitud_palabra, int redondeo) {
     int* senial_cuantizada = (int*) malloc(longitud * sizeof(int));
     
     // obtenemos la amplitud maxima de la señal
-    int max = x[0];
+    float max_abs = fabs(x[0]);
 
     // Recorrer el array para encontrar el máximo
     for(int i = 1; i < longitud; ++i) {
-        if(x[i] > max) {
-            max = x[i];
+        if(fabs(x[i]) > max_abs) {
+            max_abs = fabs(x[i]);
         }
     }
 
@@ -240,7 +240,7 @@ int* cuantizacion(float* x, int longitud, int longitud_palabra, int redondeo) {
 
     for(int i = 0; i < N; i++) {
         // Normalizamos la muestra
-        float muestra_normalizada = x[i] / max;
+        float muestra_normalizada = x[i] / max_abs;
         
         // cuantizamos nuestra muestra -> (int) muestra * 2 ^ (longitud palabra sin signo)
         // si queremos que el resultado se redondee, sumamos 0.5
