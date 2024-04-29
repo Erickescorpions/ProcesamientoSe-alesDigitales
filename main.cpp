@@ -6,6 +6,8 @@
 #include <sys/wait.h>
 
 #include <random>
+#include <algorithm>
+#include <iostream>
 
 #define N 1000
 #define PI M_PI
@@ -19,7 +21,7 @@ float calcular_potencia_fn(float* fn, int longitud);
 float calcular_snr(float potencia_ruido, float potencia_fn);
 void generar_ruido_en_fn(float* fn, int longitud);
 float* obtener_submuestras(float* fn_muestreada, int longitud, int razon_submuestreo, int longitud_submuestreo);
-int* cuantizacion(float* x, int longitud, int qi, int redondeo, int amplitud_original);
+int* cuantizacion(float* x, int longitud, int qi, int redondeo);
 
 
 int main() {
@@ -56,17 +58,17 @@ int main() {
     fn_a_archivo(submuestras, "submuestras.dat", longitud_submuestreo);
 
     // cuantizamos por redondeo 5 bits
-    int* cuantizada_redondeo5 = cuantizacion(fn, N, qi1, 1, amplitud);
+    int* cuantizada_redondeo5 = cuantizacion(fn, N, qi1, 1);
     // cuantizamos por truncamiento 5 bits
-    int* cuantizada_truncamiento5 = cuantizacion(fn, N, qi1, 0, amplitud);
+    int* cuantizada_truncamiento5 = cuantizacion(fn, N, qi1, 0);
 
     fn_entero_a_archivo(cuantizada_redondeo5, "redondeo5.dat", N);
     fn_entero_a_archivo(cuantizada_truncamiento5, "truncamiento5.dat", N);
 
     // cuantizamos por redondeo 12 bits
-    int* cuantizada_redondeo12 = cuantizacion(fn, N, qi2, 1, amplitud);
+    int* cuantizada_redondeo12 = cuantizacion(fn, N, qi2, 1);
     // cuantizamos por truncamiento 12 bits
-    int* cuantizada_truncamiento12 = cuantizacion(fn, N, qi2, 0, amplitud);
+    int* cuantizada_truncamiento12 = cuantizacion(fn, N, qi2, 0);
 
     fn_entero_a_archivo(cuantizada_redondeo12, "redondeo12.dat", N);
     fn_entero_a_archivo(cuantizada_truncamiento12, "truncamiento12.dat", N);
@@ -213,9 +215,19 @@ float* obtener_submuestras(float* fn, int longitud, int razon_submuestreo, int l
 }
 
 
-int* cuantizacion(float* x, int longitud, int longitud_palabra, int redondeo, int amplitud_original) {
+int* cuantizacion(float* x, int longitud, int longitud_palabra, int redondeo) {
     int* senial_cuantizada = (int*) malloc(longitud * sizeof(int));
     
+    // obtenemos la amplitud maxima de la señal
+    int max = x[0];
+
+    // Recorrer el array para encontrar el máximo
+    for(int i = 1; i < longitud; ++i) {
+        if(x[i] > max) {
+            max = x[i];
+        }
+    }
+
     // si se activa la bandera de redondeo, se suma 0.5
     float aumento_por_redondeo = redondeo == 1 ? 0.5 : 0.0;
 
@@ -228,7 +240,7 @@ int* cuantizacion(float* x, int longitud, int longitud_palabra, int redondeo, in
 
     for(int i = 0; i < N; i++) {
         // Normalizamos la muestra
-        float muestra_normalizada = x[i] / amplitud_original;
+        float muestra_normalizada = x[i] / max;
         
         // cuantizamos nuestra muestra -> (int) muestra * 2 ^ (longitud palabra sin signo)
         // si queremos que el resultado se redondee, sumamos 0.5
