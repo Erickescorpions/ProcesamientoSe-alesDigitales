@@ -22,7 +22,7 @@ float calcular_snr(float potencia_ruido, float potencia_fn);
 void generar_ruido_en_fn(float* fn, int longitud);
 float* obtener_submuestras(float* fn_muestreada, int longitud, int razon_submuestreo, int longitud_submuestreo);
 int* cuantizacion(float* x, int longitud, int qi, int redondeo);
-
+float calcular_error(float* x_original, int* senial_cuantizada, int longitud, int longitud_palabra);
 
 int main() {
     int numero_equipo;
@@ -58,20 +58,26 @@ int main() {
     fn_a_archivo(submuestras, "submuestras.dat", longitud_submuestreo);
 
     // cuantizamos por redondeo 5 bits
-    int* cuantizada_redondeo5 = cuantizacion(fn, N, qi1, 1);
+    int* cuantizada_redondeo_qi1 = cuantizacion(fn, N, qi1, 1);
     // cuantizamos por truncamiento 5 bits
-    int* cuantizada_truncamiento5 = cuantizacion(fn, N, qi1, 0);
+    int* cuantizada_truncamiento_qi1 = cuantizacion(fn, N, qi1, 0);
 
-    fn_entero_a_archivo(cuantizada_redondeo5, "redondeo5.dat", N);
-    fn_entero_a_archivo(cuantizada_truncamiento5, "truncamiento5.dat", N);
+    fn_entero_a_archivo(cuantizada_redondeo_qi1, "redondeo_qi1.dat", N);
+    fn_entero_a_archivo(cuantizada_truncamiento_qi1, "truncamiento_qi1.dat", N);
 
     // cuantizamos por redondeo 12 bits
-    int* cuantizada_redondeo12 = cuantizacion(fn, N, qi2, 1);
+    int* cuantizada_redondeo_qi2 = cuantizacion(fn, N, qi2, 1);
     // cuantizamos por truncamiento 12 bits
-    int* cuantizada_truncamiento12 = cuantizacion(fn, N, qi2, 0);
+    int* cuantizada_truncamiento_qi2 = cuantizacion(fn, N, qi2, 0);
 
-    fn_entero_a_archivo(cuantizada_redondeo12, "redondeo12.dat", N);
-    fn_entero_a_archivo(cuantizada_truncamiento12, "truncamiento12.dat", N);
+    fn_entero_a_archivo(cuantizada_redondeo_qi2, "redondeo_qi2.dat", N);
+    fn_entero_a_archivo(cuantizada_truncamiento_qi2, "truncamiento_qi2.dat", N);
+
+    puts("\nErrores de cuantizacion:\n");
+    printf("El error de cuantizacion para %d bits con valores redondeados es: %f\n", qi1, calcular_error(fn, cuantizada_redondeo_qi1, N, qi1));
+    printf("El error de cuantizacion para %d bits con valores truncados es: %f\n", qi1, calcular_error(fn, cuantizada_truncamiento_qi1, N, qi1));
+    printf("El error de cuantizacion para %d bits con valores redondeados es: %f\n", qi2, calcular_error(fn, cuantizada_redondeo_qi2, N, qi2));
+    printf("El error de cuantizacion para %d bits con valores truncados es: %f\n", qi2, calcular_error(fn, cuantizada_truncamiento_qi2, N, qi2));
 
     // creamos un proceso hijo con fork para lanzar la grafica de la senial original
     // y la senial submuestreada
@@ -84,7 +90,15 @@ int main() {
     // proceso hijo para las graficas de cuantizacion
     if(fork() == 0) {
         // Este es el proceso hijo
-        execlp("gnuplot", "gnuplot", "-p", "cuantizacion.gp", NULL);
+        execlp("gnuplot", "gnuplot", "-p", "cuantizacion_qi1.gp", NULL);
+        perror("Error al ejecutar Gnuplot para cuantizacion.gp");
+        exit(1);
+    }
+
+    // proceso hijo para las graficas de cuantizacion qi2
+    if(fork() == 0) {
+        // Este es el proceso hijo
+        execlp("gnuplot", "gnuplot", "-p", "cuantizacion_qi2.gp", NULL);
         perror("Error al ejecutar Gnuplot para cuantizacion.gp");
         exit(1);
     }
@@ -96,10 +110,10 @@ int main() {
     // liberamos memoria
     free(fn);
     free(submuestras);
-    free(cuantizada_redondeo12);
-    free(cuantizada_redondeo5);
-    free(cuantizada_truncamiento12);
-    free(cuantizada_truncamiento5);
+    free(cuantizada_redondeo_qi1);
+    free(cuantizada_truncamiento_qi1);
+    free(cuantizada_truncamiento_qi2);
+    free(cuantizada_redondeo_qi2);
 
     return 0;
 }
@@ -263,4 +277,43 @@ int* cuantizacion(float* x, int longitud, int longitud_palabra, int redondeo) {
     }
 
     return senial_cuantizada;
+}
+
+float calcular_error(float* x_original, int* senial_cuantizada, int longitud, int longitud_palabra) {
+    float error_total = 0.0;
+    float max_abs = fabs(x_original[0]);
+
+    // Encontrar el valor absoluto máximo en la señal original
+    for(int i = 1; i < longitud; ++i) {
+        if(fabs(x_original[i]) > max_abs) {
+            max_abs = fabs(x_original[i]);
+        }
+    }
+    
+    float* x_original_normalizada = (float*) malloc(longitud * sizeof(float));
+    // Normalizar la señal original al rango [-1, 1]
+    for(int i = 0; i < longitud; i++) {
+        x_original_normalizada[i] = x_original[i] / max_abs;
+    }
+
+    int* senial_cuantizada_normalizada = (int*) malloc(longitud * sizeof(int));
+    // Normalizar la señal cuantizada al rango [-1, 1]
+    for(int i = 0; i < longitud; i++) {
+        senial_cuantizada_normalizada[i] = senial_cuantizada[i] / ((1 << (longitud_palabra - 1)) - 1);
+        //printf("%d\n", senial_cuantizada_normalizada[i]);
+    }
+
+    // Calcular el error cuadrático medio (RMSE)
+    for(int i = 0; i < longitud; i++) {
+        float error = x_original_normalizada[i] - (float) senial_cuantizada_normalizada[i];
+        error_total += error * error;
+    }
+
+    //printf("error total %f\n", error_total);
+
+    free(x_original_normalizada);
+    free(senial_cuantizada_normalizada);
+
+    float rmse = sqrt(error_total / longitud);
+    return rmse;
 }
