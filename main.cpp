@@ -80,10 +80,16 @@ int main() {
     printf("El error de cuantizacion para %d bits con valores truncados es: %f\n", qi2, calcular_error_cuantizacion(fn, cuantizada_truncamiento_qi2, N, qi2));
 
     // creamos un proceso hijo con fork para lanzar la grafica de la senial original
-    // y la senial submuestreada
     if(fork() == 0) {
-        execlp("gnuplot", "gnuplot", "-p", "grafica.gp", NULL);
-        perror("Error al ejecutar Gnuplot para grafica.gp");
+        execlp("gnuplot", "gnuplot", "-p", "original.gp", NULL);
+        perror("Error al ejecutar Gnuplot para original.gp");
+        exit(1);
+    }
+
+    // proceso hijo para grafica de la senial submuestreada
+    if(fork() == 0) {
+        execlp("gnuplot", "gnuplot", "-p", "submuestreo.gp", NULL);
+        perror("Error al ejecutar Gnuplot para submuestreo.gp");
         exit(1);
     }
 
@@ -91,7 +97,7 @@ int main() {
     if(fork() == 0) {
         // Este es el proceso hijo
         execlp("gnuplot", "gnuplot", "-p", "cuantizacion_qi1.gp", NULL);
-        perror("Error al ejecutar Gnuplot para cuantizacion.gp");
+        perror("Error al ejecutar Gnuplot para cuantizacion_qi1.gp");
         exit(1);
     }
 
@@ -99,7 +105,7 @@ int main() {
     if(fork() == 0) {
         // Este es el proceso hijo
         execlp("gnuplot", "gnuplot", "-p", "cuantizacion_qi2.gp", NULL);
-        perror("Error al ejecutar Gnuplot para cuantizacion.gp");
+        perror("Error al ejecutar Gnuplot para cuantizacion_qi2.gp");
         exit(1);
     }
 
@@ -305,7 +311,7 @@ float calcular_error_cuantizacion(float* x_original, int* senial_cuantizada, int
         }
     }
 
-    // Calcular el error cuadrático medio (RMSE)
+    // Calcular el error cuadrático medio
     for(int i = 0; i < longitud; i++) {
         // normalizamos los vales antes
         float n_original = x_original[i] / max_original;
